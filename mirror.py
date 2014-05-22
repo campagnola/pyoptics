@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from pybench import *
+from pyoptic import *
 from PyQt4 import QtGui, QtCore
 QtCore.Signal = QtCore.pyqtSignal
 
@@ -9,18 +9,19 @@ from pyqtgraph import Point
 
 app = QtGui.QApplication([])
 
-w = QtGui.QMainWindow()
-view = Canvas()
+w = pg.GraphicsWindow()
+
+view = w.addViewBox()
 view.show()
 optics = []
 
 
 #view.enableMouse()
-#view.aspectLocked = True
+view.setAspectLocked()
 #view.invertY(False)
-#grid = pg.GridItem()
-#view.addItem(grid)
-#view.setRange(QtCore.QRectF(-150, 200, 500, 400))
+grid = pg.GridItem()
+view.addItem(grid)
+view.setRange(QtCore.QRectF(-150, 200, 500, 400))
 
 optics = []
 rays = []
@@ -32,7 +33,7 @@ optics.append(m)
 allRays = []
 for y in np.linspace(-10, 10, 21):
     r = Ray(start=Point(-100, y))
-    view.addGraphicsItem(r)
+    view.addItem(r)
     allRays.append(r)
 
 for o in optics:

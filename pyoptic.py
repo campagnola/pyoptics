@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from PyQt4 import QtGui, QtCore
 import pyqtgraph as pg
-from pyqtgraph.canvas import Canvas, CanvasItem
+#from pyqtgraph.canvas import Canvas, CanvasItem
 import numpy as np
 from pyqtgraph import Point
 
@@ -94,9 +94,9 @@ class ParamObj:
     def setParams(self, **params):
         """Set parameters for this optic. This is a good function to override for subclasses."""
         self.__params.update(params)
-        self.stateChanged()
+        self.paramStateChanged()
 
-    def stateChanged(self):
+    def paramStateChanged(self):
         pass
 
     def __getitem__(self, item):
@@ -106,51 +106,70 @@ class ParamObj:
         return self.__params[param]
 
 
-class Optic(CanvasItem, ParamObj):
+class Optic(pg.ROI, ParamObj):
     
     sigStateChanged = QtCore.Signal()
     
     
     def __init__(self, gitem, **params):
         ParamObj.__init__(self)
-        #pg.widgets.ROI.__init__(self, [0,0], [1,1])
+        pg.ROI.__init__(self, [0,0], [1,1])
+
+        self.gitem = gitem
+        self.surfaces = gitem.surfaces
+        gitem.setParentItem(self)
+        
         defaults = {
             'pos': Point(0,0),
             'angle': 0,
         }
         defaults.update(params)
-        CanvasItem.__init__(self, gitem) #, **defaults)
+        #CanvasItem.__init__(self, gitem) #, **defaults)
         self._ior_cache = {}
         self.setParams(**defaults)
-        self.sigTransformChanged.connect(self.transformChanged)
-        #self.addRotateHandle([1, 1], [0, 0])
-        #self.addRotateHandle([0, 1], [1, 1])
-        #self.updateTransform()
+        self.sigRegionChanged.connect(self.roiChanged)
+        #self.sigTransformChanged.connect(self.transformChanged)
+        self.addRotateHandle([1, 1], [0.5, 0.5])
+        #self.addRotateHandle([0.5, 0.5], [1, 1])
+        self.updateTransform()
         
-    #def updateTransform(self):
-        #self.resetTransform()
-        #self.setPos(0, 0)
-        #self.translate(Point(self['pos']))
-        #self.rotate(self['angle'])
+    def updateTransform(self):
+        self.resetTransform()
+        self.setPos(0, 0)
+        self.translate(Point(self['pos']))
+        self.rotate(self['angle'])
         
-    #def setParam(self, param, val):
-        #ParamObj.setParam(self, param, val)
+    def setParam(self, param, val):
+        ParamObj.setParam(self, param, val)
         
-        #if param == 'pos':
-            #self.setTranslate(val)
-        #elif param == 'angle':
-            #self.setRotate(val)
-            ##self.updateTransform()
+        if param == 'pos':
+            self.setPos(val)
+        elif param == 'angle':
+            self.setAngle(val)
+            #self.updateTransform()
 
-    def stateChanged(self):
+
+
+    def paramStateChanged(self):
         """Some parameters of the optic have changed."""
-        self.setTranslate(*self['pos'])
-        self.setRotate(self['angle'])
+        self.setPos(*self['pos'])
+        self.setAngle(self['angle'])
+        
+        br = self.gitem.boundingRect()
+        self.setSize([br.width(), br.height()])
+        
+        self.gitem.setPos(-br.left(), -br.top())
+        
+        self.sigStateChanged.emit()
+
+    def roiChanged(self):
+        #self['pos'] = self.pos()
+        #self['angle'] = self.angle()
         self.sigStateChanged.emit()
         
-    def transformChanged(self):
-        ## called when the CanvasItem transform has moved
-        self.sigStateChanged.emit()
+    #def transformChanged(self):
+        ### called when the CanvasItem transform has moved
+        #self.sigStateChanged.emit()
         
     def paint(self, p, *args):
         pass
@@ -177,15 +196,14 @@ class Lens(Optic):
             'reflect': False,
         }
         defaults.update(params)
-        #self.surfaces = [circleSurface(defaults['r1'], defaults['dia']), circleSurface(-defaults['r2'], defaults['dia'])]
+        #self.surfaces = [CircleSurface(defaults['r1'], defaults['dia']), CircleSurface(-defaults['r2'], defaults['dia'])]
         gitem = CircularSolid(brush=(100, 100, 130, 100), **defaults)
-        self.surfaces = gitem.surfaces
         Optic.__init__(self, gitem, **defaults)
         #for s in self.surfaces:
             #s.setParentItem(self)
         #self.setParams(**defaults)
         
-    #def stateChanged(self):
+    #def paramStateChanged(self):
         #self.surfaces[0].setParams(self['r1'], self['dia'])
         #self.surfaces[1].setParams(-self['r2'], self['dia'])
         #self.surfaces[0].setPos(-self['d']/2., 0)
@@ -200,7 +218,33 @@ class Lens(Optic):
         
     def propagateRay(self, ray):
         """Refract, reflect, absorb, and/or scatter ray. This function may create and return new rays"""
-        
+
+        """
+        NOTE:: We can probably use this to compute refractions faster: (from GLSL 120 docs)
+
+        For the incident vector I and surface normal N, and the
+        ratio of indices of refraction eta, return the refraction
+        vector. The result is computed by
+        k = 1.0 - eta * eta * (1.0 - dot(N, I) * dot(N, I))
+        if (k < 0.0)
+            return genType(0.0)
+        else
+            return eta * I - (eta * dot(N, I) + sqrt(k)) * N
+        The input parameters for the incident vector I and the
+        surface normal N must already be normalized to get the
+        desired results. eta == ratio of IORs
+
+
+        For reflection:
+        For the incident vector I and surface orientation N,
+        returns the reflection direction:
+        I – 2 ∗ dot(N, I) ∗ N
+        N must already be normalized in order to achieve the
+        desired result.
+        """
+
+
+
         iors = [self.ior(ray['wl']), 1.0]
         for i in [0,1]:
             surface = self.surfaces[i]
@@ -254,7 +298,6 @@ class Mirror(Optic):
         }
         defaults.update(params)
         gitem = CircularSolid(brush=(100,100,100,255), **defaults)
-        self.surfaces = gitem.surfaces
         Optic.__init__(self, gitem, **defaults)
         
     def propagateRay(self, ray):
@@ -263,7 +306,7 @@ class Mirror(Optic):
         surface = self.surfaces[0]
         p1, ai = surface.intersectRay(ray)
         if p1 is not None:
-            p1 = surface.mapToScene(p1)
+            p1 = surface.mapToItem(ray, p1)
             rd = ray['dir']
             a1 = np.arctan2(rd[1], rd[0])
             ar = a1  + np.pi - 2*ai
@@ -287,7 +330,7 @@ class CircularSolid(pg.GraphicsObject, ParamObj):
         defaults = dict(x1=-2, r1=100, d1=25.4, x2=2, r2=100, d2=25.4)
         defaults.update(opts)
         ParamObj.__init__(self)
-        self.surfaces = [circleSurface(defaults['r1'], defaults['d1']), circleSurface(-defaults['r2'], defaults['d2'])]
+        self.surfaces = [CircleSurface(defaults['r1'], defaults['d1']), CircleSurface(-defaults['r2'], defaults['d2'])]
         pg.GraphicsObject.__init__(self)
         for s in self.surfaces:
             s.setParentItem(self)
@@ -304,7 +347,7 @@ class CircularSolid(pg.GraphicsObject, ParamObj):
 
         self.setParams(**defaults)
 
-    def stateChanged(self):
+    def paramStateChanged(self):
         self.updateSurfaces()
 
     def updateSurfaces(self):
@@ -325,15 +368,13 @@ class CircularSolid(pg.GraphicsObject, ParamObj):
         return self.path
     
     def paint(self, p, *args):
+        p.setRenderHints(p.renderHints() | p.Antialiasing)
         p.setPen(self.pen)
         p.fillPath(self.path, self.brush)
         p.drawPath(self.path)
         
-        
-        
-        
 
-class circleSurface(pg.GraphicsObject):
+class CircleSurface(pg.GraphicsObject):
     def __init__(self, radius=None, diameter=None):
         """center of physical surface is at 0,0
         radius is the radius of the surface. If radius is None, the surface is flat. 
@@ -382,7 +423,8 @@ class circleSurface(pg.GraphicsObject):
         
     def paint(self, p, *args):
         return  ## usually we let the optic draw.
-        p.drawPath(self.path)
+        #p.setPen(pg.mkPen('r'))
+        #p.drawPath(self.path)
             
     def intersectRay(self, ray):
         ## return the point of intersection and the angle of incidence
@@ -484,7 +526,7 @@ class Ray(pg.GraphicsObject, ParamObj):
             self.scene().removeItem(c)
         self.children = []
         
-    def stateChanged(self):
+    def paramStateChanged(self):
         pass
         
     def addChild(self, ch):
@@ -497,7 +539,7 @@ class Ray(pg.GraphicsObject, ParamObj):
         if relativeTo is None:
             return pos, dir
         else:
-            trans = relativeTo.sceneTransform().inverted()[0] * self.sceneTransform()
+            trans = self.itemTransform(relativeTo)[0] # relativeTo.sceneTransform().inverted()[0] * self.sceneTransform()
             p1 = trans.map(pos)
             p2 = trans.map(pos + dir)
             return Point(p1), Point(p2-p1)
@@ -512,6 +554,7 @@ class Ray(pg.GraphicsObject, ParamObj):
         
     def paint(self, p, *args):
         #p.setPen(pg.mkPen((255,0,0, 150)))
+        p.setRenderHints(p.renderHints() | p.Antialiasing)
         p.setPen(wlPen(self['wl']))
         p.drawPath(self.path)
         
