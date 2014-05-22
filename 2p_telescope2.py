@@ -1,28 +1,27 @@
 # -*- coding: utf-8 -*-
-from pybench import *
+from pyoptic import *
 from PyQt4 import QtGui, QtCore
 QtCore.Signal = QtCore.pyqtSignal
 
 import pyqtgraph as pg
+import pyqtgraph.canvas
 import numpy as np
 from pyqtgraph import Point
 
 app = QtGui.QApplication([])
 
-w = QtGui.QMainWindow()
-view = pg.GraphicsView()
-w.setCentralWidget(view)
-w.show()
+w = pg.GraphicsWindow()
+view = w.addViewBox()
 
 optics = []
 
 
-view.enableMouse()
+view.setAspectLocked()
 #view.aspectLocked = True
 #view.invertY(False)
-grid = pg.GridItem()
-view.addItem(grid)
-view.setRange(QtCore.QRectF(200, -100, 500, 400))
+#grid = pg.GridItem()
+#view.addItem(grid)
+#view.setRange(QtCore.QRectF(200, -100, 500, 400))
 
 
 

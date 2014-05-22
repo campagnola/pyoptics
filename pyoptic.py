@@ -106,18 +106,22 @@ class ParamObj:
         return self.__params[param]
 
 
-class Optic(pg.ROI, ParamObj):
+class Optic(pg.GraphicsObject, ParamObj):
     
     sigStateChanged = QtCore.Signal()
     
     
     def __init__(self, gitem, **params):
         ParamObj.__init__(self)
-        pg.ROI.__init__(self, [0,0], [1,1])
+        pg.GraphicsObject.__init__(self) #, [0,0], [1,1])
 
         self.gitem = gitem
         self.surfaces = gitem.surfaces
         gitem.setParentItem(self)
+        
+        self.roi = pg.ROI([0,0], [1,1])
+        self.roi.addRotateHandle([1, 1], [0.5, 0.5])
+        self.roi.setParentItem(self)
         
         defaults = {
             'pos': Point(0,0),
@@ -126,10 +130,9 @@ class Optic(pg.ROI, ParamObj):
         defaults.update(params)
         #CanvasItem.__init__(self, gitem) #, **defaults)
         self._ior_cache = {}
+        self.roi.sigRegionChanged.connect(self.roiChanged)
         self.setParams(**defaults)
-        self.sigRegionChanged.connect(self.roiChanged)
         #self.sigTransformChanged.connect(self.transformChanged)
-        self.addRotateHandle([1, 1], [0.5, 0.5])
         #self.addRotateHandle([0.5, 0.5], [1, 1])
         #self.updateTransform()
         
@@ -142,34 +145,48 @@ class Optic(pg.ROI, ParamObj):
     def setParam(self, param, val):
         ParamObj.setParam(self, param, val)
         
-        if param == 'pos':
-            self.setPos(val)
-        elif param == 'angle':
-            self.setAngle(val)
+        #if param == 'pos':
+            #self.setPos(val)
+        #elif param == 'angle':
+            #self.setAngle(val)
             #self.updateTransform()
 
     def paramStateChanged(self):
         """Some parameters of the optic have changed."""
-        #self.setPos(*self['pos'])
-        self.setAngle(self['angle'])
+        # Move graphics item
+        self.gitem.setPos(Point(self['pos']))
+        self.gitem.resetTransform()
+        self.gitem.rotate(self['angle'])
         
-        br = self.gitem.boundingRect()
-        self.setSize([br.width(), br.height()])
-        
-        p = self.pos() - br.topLeft()*Point(1, -1)
-        self.setPos(p)
-        self.gitem.setPos(-br.left(), -br.top())
+        # Move ROI to match
+        try:
+            self.roi.sigRegionChanged.disconnect(self.roiChanged)
+            br = self.gitem.boundingRect()
+            o = self.gitem.mapToParent(br.topLeft())
+            self.roi.setAngle(self['angle'])
+            self.roi.setPos(o)
+            self.roi.setSize([br.width(), br.height()])
+        finally:
+            self.roi.sigRegionChanged.connect(self.roiChanged)
         
         self.sigStateChanged.emit()
 
-    def roiChanged(self):
-        #self['pos'] = self.pos()
-        #self['angle'] = self.angle()
-        self.sigStateChanged.emit()
+    def roiChanged(self, *args):
+        pos = self.roi.pos()
+        # rotate gitem temporarily so we can decide where it will need to move
+        self.gitem.resetTransform()
+        self.gitem.rotate(self.roi.angle())
+        br = self.gitem.boundingRect()
+        o1 = self.gitem.mapToParent(br.topLeft())
+        self.setParams(angle=self.roi.angle(), pos=pos + (self.gitem.pos() - o1))
+        #self.sigStateChanged.emit()
         
     #def transformChanged(self):
         ### called when the CanvasItem transform has moved
         #self.sigStateChanged.emit()
+
+    def boundingRect(self):
+        return QtCore.QRectF()
         
     def paint(self, p, *args):
         pass
@@ -574,14 +591,6 @@ class Ray(pg.GraphicsObject, ParamObj):
         #p.drawPath(self.path)
 
 
-
-
-
-
-
-
-
-
 def trace(rays, optics):
     if len(optics) < 1 or len(rays) < 1:
         return
@@ -602,70 +611,4 @@ class Tracer(QtCore.QObject):
             
     def trace(self):
         trace(self.rays, self.optics)
-
-
-#app = QtGui.QApplication([])
-
-#w = QtGui.QMainWindow()
-#view = pg.GraphicsView()
-#w.setCentralWidget(view)
-#w.show()
-
-#optics = []
-
-
-#view.enableMouse()
-#view.aspectLocked = True
-#view.invertY(False)
-#grid = pg.GridItem(view)
-#view.addItem(grid)
-#view.setRange(QtCore.QRectF(-150, 50, 500, 100))
-
-
-
-
-#optics = []
-#rays = []
-#x = 0
-#for r1 in [50, 0, -50]:
-    #for r2 in [-50, 0, 50]:
-        #l = Lens(r1=r1, r2=r2)
-        #optics.append(l)
-        #l.setPos(x, 0)
-        #x += 10
-
-#for y in [0, -20, -40, -60]:
-    #l1 = Lens(r1=51.5, r2=0, d=3.6, glass='N-BK7')
-    #l2 = Lens(r1=0, r2=51.5, d=3.6, glass='N-BK7')
-    #l1.translate(0, y)
-    #l2.translate(200, y)
-    #optics.append([l1, l2])
-    #view.addItem(l1)
-    #view.addItem(l2)
-#l1 = Lens(r1=0, r2=0, d=10)
-#optics.append(l1)
-#l1.rotate(45)
-#l1.translate(5,0)
-
-#rays = [Ray(start=Point(-50,0), wl=600+50*x) for x in np.linspace(-10,10,21)]
-#allRays = []
-#for wl, dy in [(355, 0), (470, -20), (680, -40), (1040, -60)]:
-    #rays = []
-    #for a in [-2, 0, 2]:
-        #for y in [-0.5, -0.2, 0, 0.2, 0.5]:
-            #ang = a*np.pi/180.
-            #r = Ray(start=Point(-100 - y*np.sin(ang), dy+y*np.cos(ang)), dir=(np.cos(ang), np.sin(ang)), wl=wl)
-            #rays.append(r)
-            #view.addItem(r)
-    #allRays.append(rays)
-
-#for i in range(4):
-    #trace(allRays[i], optics[i])
-
-
-#for o in optics:
-    #view.addItem(o)
-#for ray in rays:
-    #view.addItem(ray)
-#trace(rays, optics)
 

@@ -24,7 +24,7 @@ view.setRange(QtCore.QRectF(-10, -50, 90, 60))
 optics = []
 rays = []
 #l1 = Lens(r1=0, r2=0, d=10)
-l1 = Lens(r1=20, r2=20, d=10, angle=12, glass='Corning7980')
+l1 = Lens(r1=20, r2=20, d=10, angle=8, glass='Corning7980')
 optics.append(l1)
 #l1.rotate(45)
 #l1.translate(5,0)

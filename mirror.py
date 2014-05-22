@@ -25,10 +25,10 @@ view.setRange(QtCore.QRectF(-150, 200, 500, 400))
 
 optics = []
 rays = []
-m = Mirror(r1=-100, pos=(5,0), angle=-15)
-optics.append(m)
-#m.rotate(-15)
-#m.translate(5,0)
+m1 = Mirror(r1=-100, pos=(5,0), angle=-15)
+optics.append(m1)
+m2 = Mirror(r1=-100, pos=(-40, 30), angle=180-15)
+optics.append(m2)
 
 allRays = []
 for y in np.linspace(-10, 10, 21):
