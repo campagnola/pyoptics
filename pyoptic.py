@@ -131,7 +131,7 @@ class Optic(pg.ROI, ParamObj):
         #self.sigTransformChanged.connect(self.transformChanged)
         self.addRotateHandle([1, 1], [0.5, 0.5])
         #self.addRotateHandle([0.5, 0.5], [1, 1])
-        self.updateTransform()
+        #self.updateTransform()
         
     def updateTransform(self):
         self.resetTransform()
@@ -148,16 +148,16 @@ class Optic(pg.ROI, ParamObj):
             self.setAngle(val)
             #self.updateTransform()
 
-
-
     def paramStateChanged(self):
         """Some parameters of the optic have changed."""
-        self.setPos(*self['pos'])
+        #self.setPos(*self['pos'])
         self.setAngle(self['angle'])
         
         br = self.gitem.boundingRect()
         self.setSize([br.width(), br.height()])
         
+        p = self.pos() - br.topLeft()*Point(1, -1)
+        self.setPos(p)
         self.gitem.setPos(-br.left(), -br.top())
         
         self.sigStateChanged.emit()
@@ -196,6 +196,10 @@ class Lens(Optic):
             'reflect': False,
         }
         defaults.update(params)
+        d = defaults.pop('d')
+        defaults['x1'] = -d/2.
+        defaults['x2'] = d/2.
+        
         #self.surfaces = [CircleSurface(defaults['r1'], defaults['dia']), CircleSurface(-defaults['r2'], defaults['dia'])]
         gitem = CircularSolid(brush=(100, 100, 130, 100), **defaults)
         Optic.__init__(self, gitem, **defaults)
@@ -256,7 +260,7 @@ class Lens(Optic):
             if p1 is None:
                 ray.setEnd(None)
                 break
-            p1 = surface.mapToScene(p1)
+            p1 = surface.mapToItem(ray, p1)
             
             #print "adjusted position:", p1
             #ior = self.ior(ray['wl'])
@@ -555,6 +559,7 @@ class Ray(pg.GraphicsObject, ParamObj):
     def paint(self, p, *args):
         #p.setPen(pg.mkPen((255,0,0, 150)))
         p.setRenderHints(p.renderHints() | p.Antialiasing)
+        p.setCompositionMode(p.CompositionMode_Plus)
         p.setPen(wlPen(self['wl']))
         p.drawPath(self.path)
         
