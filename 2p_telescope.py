@@ -86,4 +86,7 @@ def shift(x):
         s['pos'] = (d1, s['pos'][1])
         t['pos'] = (d3, s['pos'][1])
 
-import user
+
+import sys
+if sys.flags.interactive == 0:
+    app.exec_()

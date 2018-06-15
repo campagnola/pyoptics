@@ -137,3 +137,6 @@ timer.start(40)
 #for i in range(4):
     #trace(allRays[i], optics[i])
 
+import sys
+if sys.flags.interactive == 0:
+    app.exec_()
